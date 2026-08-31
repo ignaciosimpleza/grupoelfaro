@@ -209,13 +209,13 @@ def plantilla_base():
     # ── HITOS ──────────────────────────────────────────────────────────
     hi = wb.create_sheet('HITOS')
     titulo(hi, 'HITOS — la línea de tiempo del grupo', 'Se ve en El Grupo y en Eventos e Hitos.', 6)
-    encabezados(hi, ['id_hito', 'orden', 'año', 'titulo', 'descripcion', 'mostrar_en_web'])
+    encabezados(hi, ['id_hito', 'orden', 'año', 'titulo', 'descripcion', 'link', 'mostrar_en_web'])
     filas(hi, [
-        ('hito-01', 1, '2021', 'Inicio del grupo', 'Qué pasó ese año.', 'TRUE'),
-        ('hito-02', 2, '2026', 'Un hito más reciente', 'Qué pasó.', 'TRUE'),
+        ('hito-01', 1, '2021', 'Inicio del grupo', 'Qué pasó ese año.', '', 'TRUE'),
+        ('hito-02', 2, '2026', 'Un hito más reciente', 'Qué pasó. El link es opcional: si está, el hito muestra un botón «Visitar ↗».', '', 'TRUE'),
     ])
-    si_no(hi, 'F')
-    anchos(hi, {'A': 14, 'B': 7, 'C': 9, 'D': 34, 'E': 70, 'F': 16})
+    si_no(hi, 'G')
+    anchos(hi, {'A': 14, 'B': 7, 'C': 9, 'D': 34, 'E': 70, 'F': 36, 'G': 16})
 
     # ── EJES ───────────────────────────────────────────────────────────
     ej = wb.create_sheet('EJES')
