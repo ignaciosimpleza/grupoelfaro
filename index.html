@@ -331,7 +331,10 @@ td { padding: 10px 14px; vertical-align: middle; }
 .evento-btn { display:inline-flex; align-items:center; gap:6px; margin-top:7px; padding:6px 13px; background:var(--verde-menta); color:#1E2A2E; border:0; border-radius:9px; font-size:12px; font-weight:700; cursor:pointer; font-family:inherit; text-decoration:none; }
 .evento-btn:hover { filter:brightness(0.96); }
 
-/* ── PÁGINA EMBEBIDA (Eventos e Hitos) ── */
+/* ── PÁGINAS EMBEBIDAS (Eventos e Hitos) ── */
+.embed-tabs { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; margin-bottom:4px; }
+.embed-tab { padding:6px 14px; background:var(--crema-fondo); border:1px solid var(--beige-suave); border-radius:20px; font-size:12px; font-weight:600; color:var(--gris-oscuro,#616A6B); cursor:pointer; font-family:inherit; }
+.embed-tab.activa { background:var(--verde-menta); border-color:var(--verde-menta); color:#1E2A2E; font-weight:700; }
 .embed-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-top:6px; }
 .embed-desc { font-size:12.5px; color:var(--gris-oscuro,#616A6B); line-height:1.55; flex:1; min-width:200px; }
 .embed-frame { width:100%; height:72vh; min-height:420px; border:1px solid var(--beige-suave); border-radius:var(--radius-sm); background:#fff; margin-top:12px; }
@@ -860,9 +863,9 @@ canvas { display:block; }
         <div class="evento-timeline" id="timeline-proximos"></div>
       </div>
     </div>
-    <!-- Página propia del grupo (un viaje, un micrositio) embebida acá adentro -->
+    <!-- Páginas propias del grupo (la bitácora de cada viaje, un micrositio) embebidas acá adentro -->
     <div class="card" id="ev-card-embed" style="margin-top:16px">
-      <div class="card-title" id="ev-embed-titulo">Página del grupo</div>
+      <div class="card-title" id="ev-embed-titulo">Viajes y páginas del grupo</div>
       <div id="ev-embed-body"></div>
     </div>
   </div>
@@ -1014,7 +1017,8 @@ let EMPRESAS = [];           // pestaña EMPRESAS + CONFIG_DRIVE
 let HITOS = [];              // los mismos hitos, para «Eventos e Hitos»
 let PROXIMOS_EVENTOS = [];   // pestaña EVENTOS
 let CONCEPTOS = [];          // archivo Marco Conceptual, pestaña CONCEPTOS
-let PAGINA_EMBEBIDA = {};    // Configuración → El grupo → Página del grupo
+let PAGINAS_EMBEBIDAS = [];  // Configuración → El grupo → Viajes y páginas embebidas
+let PAGINA_EMBEBIDA_SEL = 0; // cuál de ellas se está mostrando
 
 
 // ══════════════════════════════════════════════════════════════
@@ -2083,26 +2087,43 @@ function renderEventos() {
     }${ref ? `<span class="evento-empresa">📍 ${esc(ref)}</span>` : ''}</div>`;
   }).join('');
 
-  renderPaginaEmbebida();
+  renderPaginasEmbebidas();
   aplicarVisibilidad();
 }
 
-// Página propia del grupo (Configuración → El grupo → Página del grupo):
-// se muestra embebida y con un botón para abrirla en una pestaña nueva.
-function renderPaginaEmbebida() {
+// Páginas propias del grupo (Configuración → El grupo → Viajes y páginas
+// embebidas): la bitácora de cada viaje, un micrositio. Cada una se muestra
+// embebida y con un botón para abrirla en una pestaña nueva; con varias
+// cargadas, unas pestañitas eligen cuál se ve.
+function elegirPaginaEmbebida(i) {
+  PAGINA_EMBEBIDA_SEL = i;
+  renderPaginasEmbebidas();
+}
+
+function renderPaginasEmbebidas() {
   const body = document.getElementById('ev-embed-body');
   const tit = document.getElementById('ev-embed-titulo');
   if (!body) return;
-  const p = PAGINA_EMBEBIDA || {};
-  const url = String(p.url || '').trim();
-  if (tit) tit.innerHTML = `${esc(p.titulo || 'Página del grupo')} <span>Se puede abrir en una pestaña nueva</span>`;
-  if (!/^https:\/\//i.test(url)) {
+  const paginas = PAGINAS_EMBEBIDAS;
+  if (!paginas.length) {
+    if (tit) tit.textContent = 'Viajes y páginas del grupo';
     body.dataset.estado = 'vacio';
-    body.innerHTML = vacioHtml('Acá se puede embeber una página propia del grupo (por ejemplo, la de un viaje). Se configura en <strong>Configuración → El grupo → Página del grupo</strong> pegando su URL.', true);
+    body.innerHTML = vacioHtml('Acá se pueden embeber páginas propias del grupo, cada una con su botón para abrirla aparte (por ejemplo, la bitácora de cada viaje). Se cargan en <strong>Configuración → El grupo → Viajes y páginas embebidas</strong>.', true);
     return;
   }
+  if (PAGINA_EMBEBIDA_SEL >= paginas.length || PAGINA_EMBEBIDA_SEL < 0) PAGINA_EMBEBIDA_SEL = 0;
+  const p = paginas[PAGINA_EMBEBIDA_SEL];
+  const url = String(p.url || '').trim();
+  if (tit) tit.innerHTML = paginas.length === 1
+    ? `${esc(p.titulo || 'Página del grupo')} <span>Se puede abrir en una pestaña nueva</span>`
+    : `Viajes y páginas del grupo <span>${paginas.length} páginas</span>`;
+  const tabs = paginas.length > 1
+    ? `<div class="embed-tabs">${paginas.map((x, i) =>
+        `<button class="embed-tab${i === PAGINA_EMBEBIDA_SEL ? ' activa' : ''}" onclick="elegirPaginaEmbebida(${i})">${esc(x.titulo || 'Página ' + (i + 1))}</button>`
+      ).join('')}</div>`
+    : '';
   body.dataset.estado = 'ok';
-  body.innerHTML = `
+  body.innerHTML = `${tabs}
     <div class="embed-head">
       <div class="embed-desc">${esc(p.desc || '')}</div>
       <a class="evento-btn" onclick="openLink('${jsq(url)}')">Abrir en una pestaña nueva ↗</a>
@@ -2705,7 +2726,7 @@ const DRIVE_SECTIONS = {
   empresas:  { texto: 'Las fichas se administran en <strong>Configuración → El grupo → Empresas</strong>. Los documentos de cada una provienen de su carpeta de Drive.', destino: 'contenido' },
   procesos:  { texto: 'Cada empresa lista los archivos de su carpeta de Drive (subcarpeta <strong>Presentaciones</strong>). Al subir un archivo a Drive, aparece en esta sección. El botón <strong>Bitácora</strong> abre el documento de la subcarpeta <strong>Proceso</strong>.', destino: 'archivos' },
   calendario:{ texto: 'Las reuniones se editan en esta misma sección. Las reglas de generación, la disponibilidad de cada empresa y las semanas sin reunión están en el panel <strong>Cómo se arma la agenda</strong>, arriba.', destino: '' },
-  eventos:   { texto: 'Los <strong>hitos</strong>, la <strong>agenda de eventos</strong> y la <strong>página embebida</strong> se administran en <strong>Configuración → El grupo</strong>. La fecha de un evento admite texto libre: «4-5-6/8», «23 y 24/10».', destino: 'contenido' },
+  eventos:   { texto: 'Los <strong>hitos</strong>, la <strong>agenda de eventos</strong> y los <strong>viajes y páginas embebidas</strong> se administran en <strong>Configuración → El grupo</strong>. La fecha de un evento admite texto libre: «4-5-6/8», «23 y 24/10».', destino: 'contenido' },
   recursos:  { texto: 'El <strong>marco conceptual</strong> se administra en <strong>Configuración → El grupo</strong>. Las <strong>reuniones técnicas</strong> y las <strong>herramientas</strong> provienen de las carpetas de Drive indicadas en <strong>Configuración → Archivos</strong>.', destino: 'archivos' },
 };
 
@@ -2858,7 +2879,7 @@ const CONFIG_VACIA = () => ({
     objetivoAnioAmpliado: '', ejesTitulo: '', fraseDestacada: '', principios: [],
   },
   equipo: [], empresas: [], sinReunion: [], hitos: [], ejes: [], eventos: [], conceptos: [],
-  embebida: { titulo: '', url: '', desc: '' },
+  paginas: [],
   calendario: { diaSemana: 1, hora: '', cadenciaSemanas: 1, saltarFeriados: true, rondaNovedadesCada: 0, tecnicaCada: 0 },
 });
 
@@ -2997,13 +3018,13 @@ const ESQUEMA_CONFIG = [
     ],
   },
   {
-    id: 'embebida', titulo: 'Página del grupo (embebida)', icono: '🌐',
-    desc: 'Una página propia del grupo —por ejemplo, la de un viaje— que se muestra adentro de «Eventos e Hitos», con un botón para abrirla en una pestaña nueva. Con la URL vacía, la tarjeta no se muestra.',
-    tipo: 'campos', ruta: 'embebida',
-    campos: [
-      { k: 'url', label: 'URL de la página', tipo: 'texto', ph: 'https://viaje-dop-ago-26.vercel.app',
+    id: 'paginas', titulo: 'Viajes y páginas embebidas', icono: '🌐',
+    desc: 'Páginas propias del grupo —la bitácora de cada viaje, un micrositio— que se muestran adentro de «Eventos e Hitos», cada una con su botón para abrirla en una pestaña nueva. Con varias cargadas, se elige cuál ver con pestañas. Sin ninguna, la tarjeta no se muestra.',
+    tipo: 'tabla', ruta: 'paginas', etiquetaItem: 'página',
+    cols: [
+      { k: 'titulo', label: 'Título', tipo: 'texto', ph: 'Viaje visita a 3 empresas · Agosto 2026' },
+      { k: 'url', label: 'URL', tipo: 'texto', ph: 'https://viaje-dop-ago-26.vercel.app',
         ayuda: 'Tiene que empezar con <code>https://</code>. La página tiene que permitir ser embebida (las de Vercel lo permiten salvo que tengan protección de acceso).' },
-      { k: 'titulo', label: 'Título de la tarjeta', tipo: 'texto', ph: 'Página del grupo' },
       { k: 'desc', label: 'Bajada', tipo: 'texto', ayuda: 'Opcional. Texto corto que acompaña al botón de abrir.' },
     ],
   },
@@ -3073,7 +3094,11 @@ function aplicarConfigAlSitio() {
   });
   GRUPO_HITOS = (CONFIG.hitos || []).filter(h => h.titulo);
   HITOS = GRUPO_HITOS.map(h => ({ fecha: h.anio || '', titulo: h.titulo, desc: h.desc, link: h.link || '', tipo: 'pasada' }));
-  PAGINA_EMBEBIDA = CONFIG.embebida || {};
+  // Solo URLs https: cualquier otra cosa (una ruta, un javascript:) no se embebe
+  const urlOk = p => /^https:\/\//i.test(String(p.url || '').trim());
+  PAGINAS_EMBEBIDAS = (CONFIG.paginas || []).filter(urlOk);
+  // Compatibilidad: una config guardada con el formato viejo de una sola página
+  if (!PAGINAS_EMBEBIDAS.length && CONFIG.embebida && urlOk(CONFIG.embebida)) PAGINAS_EMBEBIDAS = [CONFIG.embebida];
   GRUPO_EJES = (CONFIG.ejes || []).filter(e => e.titulo);
   PROXIMOS_EVENTOS = (CONFIG.eventos || []).filter(e => e.titulo || e.fecha)
     .map(e => ({ fecha: e.fecha, titulo: e.titulo, desc: e.desc, empresa: e.lugar }));
@@ -3411,7 +3436,7 @@ const MAPA_SITIO = [
   { sec:'eventos', titulo:'Eventos e Hitos', filas:[
     { que:'Hitos',                    fuente:'Planilla base · pestaña HITOS', key:'baseFileId' },
     { que:'Agenda de eventos',        fuente:'Planilla base · pestaña EVENTOS (fecha en texto libre)', key:'baseFileId' },
-    { que:'Página del grupo (embebida)', fuente:'URL configurada en El grupo → Página del grupo', key:'@embebida' },
+    { que:'Viajes y páginas embebidas', fuente:'URLs configuradas en El grupo → Viajes y páginas embebidas', key:'@embebida' },
   ]},
   { sec:'recursos', titulo:'Recursos del grupo', filas:[
     { que:'Marco conceptual',         fuente:'Archivo Marco Conceptual · pestaña CONCEPTOS', key:'marcoFileId' },
@@ -3439,9 +3464,9 @@ function estadoFuente(key) {
       : { txt: `${n} reuniones leídas`, cls: 'badge-green' };
   }
   if (key === '@embebida') {
-    const url = ((CONFIG || {}).embebida || {}).url;
-    return url
-      ? { txt: 'Configurada', detalle: url, cls: 'badge-green' }
+    const n = PAGINAS_EMBEBIDAS.length;
+    return n
+      ? { txt: n === 1 ? '1 página' : `${n} páginas`, detalle: PAGINAS_EMBEBIDAS.map(p => p.url).join(' · '), cls: 'badge-green' }
       : { txt: 'Sin configurar (opcional)', cls: 'badge-gray' };
   }
   const f = FUENTES[key];
@@ -3583,7 +3608,7 @@ const CONFIG_PESTANAS = [
 let CONFIG_PESTANA = 'contenido';
 
 const BLOQUES_POR_PESTANA = {
-  contenido: ['grupo', 'principios', 'equipo', 'empresas', 'hitos', 'ejes', 'eventos', 'embebida', 'conceptos'],
+  contenido: ['grupo', 'principios', 'equipo', 'empresas', 'hitos', 'ejes', 'eventos', 'paginas', 'conceptos'],
 };
 // La agenda se administra en la sección Calendario, junto al calendario mismo
 const BLOQUES_AGENDA = ['calendario', 'disponibilidad', 'sinReunion'];
@@ -3900,8 +3925,9 @@ function configDesdePlanilla(j) {
     ejes: (j.ejes || []).map(e => ({ titulo: e.titulo, desc: e.desc })),
     eventos: (j.eventos || []).map(e => ({ fecha: e.fecha, titulo: e.titulo, desc: e.desc, lugar: e.empresa })),
     conceptos: (j.conceptos || []).map(c => ({ icon: c.icon, titulo: c.titulo, formula: c.formula, desc: c.desc })),
-    // La página embebida no sale de la planilla: se conserva la que ya estaba.
-    embebida: Object.assign({ titulo: '', url: '', desc: '' }, (CONFIG || {}).embebida || {}),
+    // Las páginas embebidas no salen de la planilla: se conservan las que ya estaban.
+    paginas: ((CONFIG || {}).paginas || []).slice(),
+    embebida: (CONFIG || {}).embebida,
   };
 }
 
@@ -4091,7 +4117,7 @@ const UI_BLOQUES = [
   { key:'grupo.empresas',  el:'grupo-card-empresas', sec:'El Grupo', label:'Empresas participantes' },
   { key:'ev.hitos',        el:'ev-card-hitos',   sec:'Eventos e Hitos', label:'Hitos del grupo' },
   { key:'ev.agenda',       el:'ev-card-agenda',  sec:'Eventos e Hitos', label:'Agenda y próximos eventos' },
-  { key:'ev.embebida',     el:'ev-card-embed',   sec:'Eventos e Hitos', label:'Página del grupo (embebida)' },
+  { key:'ev.embebida',     el:'ev-card-embed',   sec:'Eventos e Hitos', label:'Viajes y páginas embebidas' },
   { key:'rec.marco',       el:'card-marco',      sec:'Recursos',  label:'Marco conceptual' },
   { key:'rec.tecnicas',    el:'card-tecnicas',   sec:'Recursos',  label:'Reuniones técnicas' },
   { key:'rec.herrweb',     el:'card-herr-web',   sec:'Recursos',  label:'Herramientas del facilitador (web)' },
