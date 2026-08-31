@@ -328,6 +328,16 @@ td { padding: 10px 14px; vertical-align: middle; }
 .evento-titulo { font-size:13.5px; font-weight:600; color:var(--navy); margin-top:2px; }
 .evento-desc { font-size:12px; color:#555; margin-top:3px; line-height:1.5; }
 .evento-empresa { display:inline-block; font-size:10.5px; padding:2px 8px; border-radius:10px; background:var(--crema-fondo); color:var(--gris-oscuro); margin-top:5px; font-weight:500; }
+.evento-btn { display:inline-flex; align-items:center; gap:6px; margin-top:7px; padding:6px 13px; background:var(--verde-menta); color:#1E2A2E; border:0; border-radius:9px; font-size:12px; font-weight:700; cursor:pointer; font-family:inherit; text-decoration:none; }
+.evento-btn:hover { filter:brightness(0.96); }
+
+/* ── PÁGINAS EMBEBIDAS (Eventos e Hitos) ── */
+.embed-tabs { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; margin-bottom:4px; }
+.embed-tab { padding:6px 14px; background:var(--crema-fondo); border:1px solid var(--beige-suave); border-radius:20px; font-size:12px; font-weight:600; color:var(--gris-oscuro,#616A6B); cursor:pointer; font-family:inherit; }
+.embed-tab.activa { background:var(--verde-menta); border-color:var(--verde-menta); color:#1E2A2E; font-weight:700; }
+.embed-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-top:6px; }
+.embed-desc { font-size:12.5px; color:var(--gris-oscuro,#616A6B); line-height:1.55; flex:1; min-width:200px; }
+.embed-frame { width:100%; height:72vh; min-height:420px; border:1px solid var(--beige-suave); border-radius:var(--radius-sm); background:#fff; margin-top:12px; }
 
 /* ── HISTORIAL / ACTIVIDAD ── */
 .historial-item { display:flex; gap:14px; padding:10px 0; border-bottom:1px solid var(--beige-suave); align-items:center; }
@@ -844,14 +854,19 @@ canvas { display:block; }
       <p>Momentos clave del grupo y próximos eventos de agenda</p>
     </div>
     <div class="two-col">
-      <div class="card">
+      <div class="card" id="ev-card-hitos">
         <div class="card-title">Hitos del grupo</div>
         <div class="evento-timeline" id="timeline-hitos"></div>
       </div>
-      <div class="card">
+      <div class="card" id="ev-card-agenda">
         <div class="card-title">Agenda y próximos eventos <span>Congresos, viajes y encuentros</span></div>
         <div class="evento-timeline" id="timeline-proximos"></div>
       </div>
+    </div>
+    <!-- Páginas propias del grupo (la bitácora de cada viaje, un micrositio) embebidas acá adentro -->
+    <div class="card" id="ev-card-embed" style="margin-top:16px">
+      <div class="card-title" id="ev-embed-titulo">Viajes y páginas del grupo</div>
+      <div id="ev-embed-body"></div>
     </div>
   </div>
 
@@ -1002,6 +1017,8 @@ let EMPRESAS = [];           // pestaña EMPRESAS + CONFIG_DRIVE
 let HITOS = [];              // los mismos hitos, para «Eventos e Hitos»
 let PROXIMOS_EVENTOS = [];   // pestaña EVENTOS
 let CONCEPTOS = [];          // archivo Marco Conceptual, pestaña CONCEPTOS
+let PAGINAS_EMBEBIDAS = [];  // Configuración → El grupo → Viajes y páginas embebidas
+let PAGINA_EMBEBIDA_SEL = 0; // cuál de ellas se está mostrando
 
 
 // ══════════════════════════════════════════════════════════════
@@ -1209,9 +1226,11 @@ function aplicarLogo() {
   }
 }
 
-// Cartel único para cuando falta la fuente de una sección
+// Cartel único para cuando falta la fuente de una sección. El enlace a
+// Configuración solo tiene sentido para quien edita: al resto del grupo el
+// cartel le queda como texto, y con auto-ocultar activado ni siquiera se ve.
 function vacioHtml(texto, campo) {
-  const link = campo
+  const link = campo && dashEditing
     ? ` <a onclick="navigate('config')" style="cursor:pointer;font-weight:700">Conectar en Configuración →</a>`
     : '';
   return `<div class="rec-empty">${texto}${link}</div>`;
@@ -1281,7 +1300,7 @@ function renderGrupo() {
 
   const principios = GRUPO_INFO.principios.map(p => `<li style="margin-bottom:5px">${esc(p)}</li>`).join('');
   const hitos = GRUPO_HITOS.map(h =>
-    `<div class="evento-item pasada"><div class="evento-fecha">${esc(h.anio)}</div><div class="evento-titulo">${esc(h.titulo)}</div><div class="evento-desc">${esc(h.desc)}</div></div>`
+    `<div class="evento-item pasada"><div class="evento-fecha">${esc(h.anio)}</div><div class="evento-titulo">${esc(h.titulo)}</div><div class="evento-desc">${esc(h.desc)}</div>${hitoBotonHtml(h.link)}</div>`
   ).join('');
   const ejes = GRUPO_EJES.map(e =>
     `<div class="concepto-card"><div class="concepto-titulo">${esc(e.titulo)}</div><div class="concepto-desc">${esc(e.desc)}</div></div>`
@@ -2034,18 +2053,31 @@ function toggleProceso(listId, header) {
 // ══════════════════════════════════════════════════════════════
 // EVENTOS
 // ══════════════════════════════════════════════════════════════
+// Botón de un hito con enlace (por ejemplo, la página de un viaje). Se abre en
+// una pestaña nueva: es más amable que pedirle a alguien que copie una URL.
+function hitoBotonHtml(link) {
+  return link ? `<div><a class="evento-btn" onclick="openLink('${jsq(link)}')">Visitar ↗</a></div>` : '';
+}
+
 function renderEventos() {
   const elH = document.getElementById('timeline-hitos');
   const elP = document.getElementById('timeline-proximos');
 
-  if (elH) elH.innerHTML = HITOS.length
-    ? HITOS.map(e =>
-        `<div class="evento-item ${esc(e.tipo || 'pasada')}"><div class="evento-fecha">${esc(e.fecha)}</div><div class="evento-titulo">${esc(e.titulo)}</div><div class="evento-desc">${esc(e.desc)}</div></div>`
-      ).join('')
-    : vacioHtml('Los hitos salen de la pestaña <strong>HITOS</strong> de la planilla base.', true);
+  // data-estado le declara a aplicarVisibilidad() si la tarjeta tiene contenido
+  // real: sin eso, el cartel de «todavía no hay nada» cuenta como contenido y la
+  // tarjeta vacía queda a la vista del grupo aunque no esté editando nadie.
+  if (elH) {
+    elH.dataset.estado = HITOS.length ? 'ok' : 'vacio';
+    elH.innerHTML = HITOS.length
+      ? HITOS.map(e =>
+          `<div class="evento-item ${esc(e.tipo || 'pasada')}"><div class="evento-fecha">${esc(e.fecha)}</div><div class="evento-titulo">${esc(e.titulo)}</div><div class="evento-desc">${esc(e.desc)}</div>${hitoBotonHtml(e.link)}</div>`
+        ).join('')
+      : vacioHtml('Los hitos salen de la pestaña <strong>HITOS</strong> de la planilla base.', true);
+  }
 
   // La fecha es texto libre: sirve tanto "29 Jun 2026" como "4-5-6/8" o "23 y 24/10".
   // La referencia (empresa, lugar u organizador) es opcional.
+  if (elP) elP.dataset.estado = PROXIMOS_EVENTOS.length ? 'ok' : 'vacio';
   if (elP && !PROXIMOS_EVENTOS.length) {
     elP.innerHTML = vacioHtml('La agenda sale de la pestaña <strong>EVENTOS</strong> de la planilla base (fecha, titulo, descripcion, lugar). La fecha es texto libre: «4-5-6/8», «23 y 24/10».', true);
   } else if (elP) elP.innerHTML = PROXIMOS_EVENTOS.map(e => {
@@ -2054,6 +2086,50 @@ function renderEventos() {
       e.desc ? `<div class="evento-desc">${esc(e.desc)}</div>` : ''
     }${ref ? `<span class="evento-empresa">📍 ${esc(ref)}</span>` : ''}</div>`;
   }).join('');
+
+  renderPaginasEmbebidas();
+  aplicarVisibilidad();
+}
+
+// Páginas propias del grupo (Configuración → El grupo → Viajes y páginas
+// embebidas): la bitácora de cada viaje, un micrositio. Cada una se muestra
+// embebida y con un botón para abrirla en una pestaña nueva; con varias
+// cargadas, unas pestañitas eligen cuál se ve.
+function elegirPaginaEmbebida(i) {
+  PAGINA_EMBEBIDA_SEL = i;
+  renderPaginasEmbebidas();
+}
+
+function renderPaginasEmbebidas() {
+  const body = document.getElementById('ev-embed-body');
+  const tit = document.getElementById('ev-embed-titulo');
+  if (!body) return;
+  const paginas = PAGINAS_EMBEBIDAS;
+  if (!paginas.length) {
+    if (tit) tit.textContent = 'Viajes y páginas del grupo';
+    body.dataset.estado = 'vacio';
+    body.innerHTML = vacioHtml('Acá se pueden embeber páginas propias del grupo, cada una con su botón para abrirla aparte (por ejemplo, la bitácora de cada viaje). Se cargan en <strong>Configuración → El grupo → Viajes y páginas embebidas</strong>.', true);
+    return;
+  }
+  if (PAGINA_EMBEBIDA_SEL >= paginas.length || PAGINA_EMBEBIDA_SEL < 0) PAGINA_EMBEBIDA_SEL = 0;
+  const p = paginas[PAGINA_EMBEBIDA_SEL];
+  const url = String(p.url || '').trim();
+  if (tit) tit.innerHTML = paginas.length === 1
+    ? `${esc(p.titulo || 'Página del grupo')} <span>Se puede abrir en una pestaña nueva</span>`
+    : `Viajes y páginas del grupo <span>${paginas.length} páginas</span>`;
+  const tabs = paginas.length > 1
+    ? `<div class="embed-tabs">${paginas.map((x, i) =>
+        `<button class="embed-tab${i === PAGINA_EMBEBIDA_SEL ? ' activa' : ''}" onclick="elegirPaginaEmbebida(${i})">${esc(x.titulo || 'Página ' + (i + 1))}</button>`
+      ).join('')}</div>`
+    : '';
+  body.dataset.estado = 'ok';
+  body.innerHTML = `${tabs}
+    <div class="embed-head">
+      <div class="embed-desc">${esc(p.desc || '')}</div>
+      <a class="evento-btn" onclick="openLink('${jsq(url)}')">Abrir en una pestaña nueva ↗</a>
+    </div>
+    <iframe class="embed-frame" src="${esc(url)}" loading="lazy" allowfullscreen
+      title="${esc(p.titulo || 'Página del grupo')}"></iframe>`;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -2650,7 +2726,7 @@ const DRIVE_SECTIONS = {
   empresas:  { texto: 'Las fichas se administran en <strong>Configuración → El grupo → Empresas</strong>. Los documentos de cada una provienen de su carpeta de Drive.', destino: 'contenido' },
   procesos:  { texto: 'Cada empresa lista los archivos de su carpeta de Drive (subcarpeta <strong>Presentaciones</strong>). Al subir un archivo a Drive, aparece en esta sección. El botón <strong>Bitácora</strong> abre el documento de la subcarpeta <strong>Proceso</strong>.', destino: 'archivos' },
   calendario:{ texto: 'Las reuniones se editan en esta misma sección. Las reglas de generación, la disponibilidad de cada empresa y las semanas sin reunión están en el panel <strong>Cómo se arma la agenda</strong>, arriba.', destino: '' },
-  eventos:   { texto: 'Los <strong>hitos</strong> y la <strong>agenda de eventos</strong> se administran en <strong>Configuración → El grupo</strong>. La fecha de un evento admite texto libre: «4-5-6/8», «23 y 24/10».', destino: 'contenido' },
+  eventos:   { texto: 'Los <strong>hitos</strong>, la <strong>agenda de eventos</strong> y los <strong>viajes y páginas embebidas</strong> se administran en <strong>Configuración → El grupo</strong>. La fecha de un evento admite texto libre: «4-5-6/8», «23 y 24/10».', destino: 'contenido' },
   recursos:  { texto: 'El <strong>marco conceptual</strong> se administra en <strong>Configuración → El grupo</strong>. Las <strong>reuniones técnicas</strong> y las <strong>herramientas</strong> provienen de las carpetas de Drive indicadas en <strong>Configuración → Archivos</strong>.', destino: 'archivos' },
 };
 
@@ -2658,6 +2734,12 @@ function onEditingChange(on) {
   // Reuniones y rotación muestra sus notas de mantenimiento solo en edición:
   // hay que repintarla al entrar y al salir.
   pintarReuniones();
+  // Los carteles de «todavía no hay nada» cambian con el modo (el enlace a
+  // Configuración solo se ve editando), así que la sección activa se repinta.
+  if (currentSection === 'eventos') renderEventos();
+  else if (currentSection === 'grupo') renderGrupo();
+  else if (currentSection === 'recursos') renderRecursosSec();
+  aplicarVisibilidad();
   document.querySelectorAll('.drive-hint').forEach(b => b.remove());
   if (!on) return;
   for (const [sec, info] of Object.entries(DRIVE_SECTIONS)) {
@@ -2746,7 +2828,7 @@ async function loadBaseFromDrive() {
     SIN_REUNION = Array.isArray(j.sinReunion) ? j.sinReunion : [];
     AVISOS_PLANILLA = Array.isArray(j.avisos) ? j.avisos : [];
     // Los hitos de "Eventos e Hitos" son los mismos de la planilla
-    HITOS = (j.hitos || []).map(h => ({ fecha: h.anio || h.fecha || '', titulo: h.titulo, desc: h.desc, tipo: 'pasada' }));
+    HITOS = (j.hitos || []).map(h => ({ fecha: h.anio || h.fecha || '', titulo: h.titulo, desc: h.desc, link: h.link || '', tipo: 'pasada' }));
     // La planilla es un punto de partida, no una fuente paralela: lo leído queda
     // volcado en la configuración del sitio, que es donde después se edita. Sin
     // esto los formularios (y el panel de la agenda) se ven vacíos aunque el
@@ -2797,6 +2879,7 @@ const CONFIG_VACIA = () => ({
     objetivoAnioAmpliado: '', ejesTitulo: '', fraseDestacada: '', principios: [],
   },
   equipo: [], empresas: [], sinReunion: [], hitos: [], ejes: [], eventos: [], conceptos: [],
+  paginas: [],
   calendario: { diaSemana: 1, hora: '', cadenciaSemanas: 1, saltarFeriados: true, rondaNovedadesCada: 0, tecnicaCada: 0 },
 });
 
@@ -2910,6 +2993,8 @@ const ESQUEMA_CONFIG = [
       { k: 'anio', label: 'Año', tipo: 'texto', ancho: 'chico' },
       { k: 'titulo', label: 'Título', tipo: 'texto' },
       { k: 'desc', label: 'Descripción', tipo: 'parrafo' },
+      { k: 'link', label: 'Enlace', tipo: 'texto', ph: 'https://…',
+        ayuda: 'Opcional. El hito muestra un botón «Visitar ↗» que abre esta dirección en una pestaña nueva.' },
     ],
   },
   {
@@ -2930,6 +3015,17 @@ const ESQUEMA_CONFIG = [
       { k: 'titulo', label: 'Título', tipo: 'texto' },
       { k: 'lugar', label: 'Lugar', tipo: 'texto' },
       { k: 'desc', label: 'Descripción', tipo: 'parrafo' },
+    ],
+  },
+  {
+    id: 'paginas', titulo: 'Viajes y páginas embebidas', icono: '🌐',
+    desc: 'Páginas propias del grupo —la bitácora de cada viaje, un micrositio— que se muestran adentro de «Eventos e Hitos», cada una con su botón para abrirla en una pestaña nueva. Con varias cargadas, se elige cuál ver con pestañas. Sin ninguna, la tarjeta no se muestra.',
+    tipo: 'tabla', ruta: 'paginas', etiquetaItem: 'página',
+    cols: [
+      { k: 'titulo', label: 'Título', tipo: 'texto', ph: 'Viaje visita a 3 empresas · Agosto 2026' },
+      { k: 'url', label: 'URL', tipo: 'texto', ph: 'https://viaje-dop-ago-26.vercel.app',
+        ayuda: 'Tiene que empezar con <code>https://</code>. La página tiene que permitir ser embebida (las de Vercel lo permiten salvo que tengan protección de acceso).' },
+      { k: 'desc', label: 'Bajada', tipo: 'texto', ayuda: 'Opcional. Texto corto que acompaña al botón de abrir.' },
     ],
   },
   {
@@ -2997,7 +3093,12 @@ function aplicarConfigAlSitio() {
     equipo: (CONFIG.equipo || []).filter(p => p.nombre),
   });
   GRUPO_HITOS = (CONFIG.hitos || []).filter(h => h.titulo);
-  HITOS = GRUPO_HITOS.map(h => ({ fecha: h.anio || '', titulo: h.titulo, desc: h.desc, tipo: 'pasada' }));
+  HITOS = GRUPO_HITOS.map(h => ({ fecha: h.anio || '', titulo: h.titulo, desc: h.desc, link: h.link || '', tipo: 'pasada' }));
+  // Solo URLs https: cualquier otra cosa (una ruta, un javascript:) no se embebe
+  const urlOk = p => /^https:\/\//i.test(String(p.url || '').trim());
+  PAGINAS_EMBEBIDAS = (CONFIG.paginas || []).filter(urlOk);
+  // Compatibilidad: una config guardada con el formato viejo de una sola página
+  if (!PAGINAS_EMBEBIDAS.length && CONFIG.embebida && urlOk(CONFIG.embebida)) PAGINAS_EMBEBIDAS = [CONFIG.embebida];
   GRUPO_EJES = (CONFIG.ejes || []).filter(e => e.titulo);
   PROXIMOS_EVENTOS = (CONFIG.eventos || []).filter(e => e.titulo || e.fecha)
     .map(e => ({ fecha: e.fecha, titulo: e.titulo, desc: e.desc, empresa: e.lugar }));
@@ -3335,6 +3436,7 @@ const MAPA_SITIO = [
   { sec:'eventos', titulo:'Eventos e Hitos', filas:[
     { que:'Hitos',                    fuente:'Planilla base · pestaña HITOS', key:'baseFileId' },
     { que:'Agenda de eventos',        fuente:'Planilla base · pestaña EVENTOS (fecha en texto libre)', key:'baseFileId' },
+    { que:'Viajes y páginas embebidas', fuente:'URLs configuradas en El grupo → Viajes y páginas embebidas', key:'@embebida' },
   ]},
   { sec:'recursos', titulo:'Recursos del grupo', filas:[
     { que:'Marco conceptual',         fuente:'Archivo Marco Conceptual · pestaña CONCEPTOS', key:'marcoFileId' },
@@ -3360,6 +3462,12 @@ function estadoFuente(key) {
     return problemas
       ? { txt: `${n} reuniones · ${problemas} sin leer`, detalle: lista.filter(x => !x.reuniones.length).map(x => `${x.empresa.nombre}: ${x.aviso}`).join(' · '), cls: 'badge-yellow' }
       : { txt: `${n} reuniones leídas`, cls: 'badge-green' };
+  }
+  if (key === '@embebida') {
+    const n = PAGINAS_EMBEBIDAS.length;
+    return n
+      ? { txt: n === 1 ? '1 página' : `${n} páginas`, detalle: PAGINAS_EMBEBIDAS.map(p => p.url).join(' · '), cls: 'badge-green' }
+      : { txt: 'Sin configurar (opcional)', cls: 'badge-gray' };
   }
   const f = FUENTES[key];
   if (f && f.estado === 'ok') {
@@ -3500,7 +3608,7 @@ const CONFIG_PESTANAS = [
 let CONFIG_PESTANA = 'contenido';
 
 const BLOQUES_POR_PESTANA = {
-  contenido: ['grupo', 'principios', 'equipo', 'empresas', 'hitos', 'ejes', 'eventos', 'conceptos'],
+  contenido: ['grupo', 'principios', 'equipo', 'empresas', 'hitos', 'ejes', 'eventos', 'paginas', 'conceptos'],
 };
 // La agenda se administra en la sección Calendario, junto al calendario mismo
 const BLOQUES_AGENDA = ['calendario', 'disponibilidad', 'sinReunion'];
@@ -3813,10 +3921,13 @@ function configDesdePlanilla(j) {
     })),
     calendario: Object.assign({ diaSemana: 1, hora: '', cadenciaSemanas: 1, saltarFeriados: true, rondaNovedadesCada: 0, tecnicaCada: 0 }, j.calendario || {}),
     sinReunion: (j.sinReunion || []).map(r => ({ desde: r.desde, hasta: r.hasta, motivo: r.motivo })),
-    hitos: (j.hitos || []).map(h => ({ anio: h.anio, titulo: h.titulo, desc: h.desc })),
+    hitos: (j.hitos || []).map(h => ({ anio: h.anio, titulo: h.titulo, desc: h.desc, link: h.link || '' })),
     ejes: (j.ejes || []).map(e => ({ titulo: e.titulo, desc: e.desc })),
     eventos: (j.eventos || []).map(e => ({ fecha: e.fecha, titulo: e.titulo, desc: e.desc, lugar: e.empresa })),
     conceptos: (j.conceptos || []).map(c => ({ icon: c.icon, titulo: c.titulo, formula: c.formula, desc: c.desc })),
+    // Las páginas embebidas no salen de la planilla: se conservan las que ya estaban.
+    paginas: ((CONFIG || {}).paginas || []).slice(),
+    embebida: (CONFIG || {}).embebida,
   };
 }
 
@@ -4004,6 +4115,9 @@ const UI_BLOQUES = [
   { key:'grupo.hitos',     el:'grupo-card-hitos',sec:'El Grupo',  label:'Hitos del grupo' },
   { key:'grupo.ejes',      el:'grupo-card-ejes', sec:'El Grupo',  label:'Ejes temáticos' },
   { key:'grupo.empresas',  el:'grupo-card-empresas', sec:'El Grupo', label:'Empresas participantes' },
+  { key:'ev.hitos',        el:'ev-card-hitos',   sec:'Eventos e Hitos', label:'Hitos del grupo' },
+  { key:'ev.agenda',       el:'ev-card-agenda',  sec:'Eventos e Hitos', label:'Agenda y próximos eventos' },
+  { key:'ev.embebida',     el:'ev-card-embed',   sec:'Eventos e Hitos', label:'Viajes y páginas embebidas' },
   { key:'rec.marco',       el:'card-marco',      sec:'Recursos',  label:'Marco conceptual' },
   { key:'rec.tecnicas',    el:'card-tecnicas',   sec:'Recursos',  label:'Reuniones técnicas' },
   { key:'rec.herrweb',     el:'card-herr-web',   sec:'Recursos',  label:'Herramientas del facilitador (web)' },
@@ -4063,7 +4177,14 @@ function avisarSeccionesVacias() {
     const cont = document.getElementById('sec-' + sec);
     if (!cont) continue;
     const bloques = [...cont.querySelectorAll(':scope > .card, :scope > .two-col')];
-    const algoVisible = bloques.some(el => getComputedStyle(el).display !== 'none');
+    // Un .two-col nunca se oculta a sí mismo: cuenta como visible solo si le
+    // queda alguna tarjeta adentro sin ocultar.
+    const algoVisible = bloques.some(el => {
+      if (getComputedStyle(el).display === 'none') return false;
+      if (el.classList.contains('two-col'))
+        return [...el.children].some(c => getComputedStyle(c).display !== 'none');
+      return true;
+    });
     let aviso = cont.querySelector('.seccion-vacia');
     if (!algoVisible && bloques.length) {
       if (!aviso) {

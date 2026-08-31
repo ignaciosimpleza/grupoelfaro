@@ -136,7 +136,8 @@ function parseBase(wb) {
   const hitosRows = findSheet(wb, ['id_hito', 'titulo', 'descripcion'], /^hitos?$/);
   const hitos = hitosRows ? tableObjects(hitosRows, ['id_hito', 'titulo', 'descripcion'])
     .filter(r => r['mostrar_en_web'] === '' || truthy(r['mostrar_en_web']))
-    .map(r => ({ anio: r['ano'] || r['año'] || '', titulo: r['titulo'], desc: r['descripcion'] })) : [];
+    .map(r => ({ anio: r['ano'] || r['año'] || '', titulo: r['titulo'], desc: r['descripcion'],
+                 link: r['link'] || r['enlace'] || '' })) : [];
 
   // EJES_2026
   const ejesRows = findSheet(wb, ['id_eje', 'titulo', 'descripcion'], /^ejes/);
